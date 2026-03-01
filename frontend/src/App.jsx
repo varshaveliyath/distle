@@ -27,7 +27,8 @@ import {
 } from 'lucide-react';
 import './index.css';
 
-const socket = io(window.location.origin);
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const socket = io(API_URL);
 
 function App() {
   const [user, setUser] = useState(null);
@@ -69,7 +70,7 @@ function App() {
 
   const fetchPartnerStatus = async (uid) => {
     try {
-      const res = await fetch(`/api/partner-status/${uid}`);
+      const res = await fetch(`${API_URL}/api/partner-status/${uid}`);
       const data = await res.json();
       if (data) setPartnerStatus(data);
     } catch (e) {
@@ -89,7 +90,7 @@ function App() {
     }
 
     try {
-      const res = await fetch(`/api/history/${user.id}/${dateStr}`);
+      const res = await fetch(`${API_URL}/api/history/${user.id}/${dateStr}`);
       const data = await res.json();
       setShowHistory({ date: dateStr, ...data });
     } catch (e) {
@@ -144,7 +145,7 @@ function App() {
 
   const handleAuth = async () => {
     const url = authMode === 'login' ? '/api/login' : '/api/register';
-    const res = await fetch(`${url}`, {
+    const res = await fetch(`${API_URL}${url}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
@@ -164,7 +165,7 @@ function App() {
   };
 
   const updateMyNote = async () => {
-    const res = await fetch('/api/note', {
+    const res = await fetch(`${API_URL}/api/note`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: user.id, note: myNote })
@@ -186,7 +187,7 @@ function App() {
     formData.append('userId', user.id);
 
     try {
-      const res = await fetch('/api/photo', {
+      const res = await fetch(`${API_URL}/api/photo`, {
         method: 'POST',
         body: formData
       });
@@ -206,7 +207,7 @@ function App() {
 
   const updateMyMood = async (mood) => {
     setMyMood(mood);
-    await fetch('/api/mood', {
+    await fetch(`${API_URL}/api/mood`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: user.id, mood })
@@ -214,7 +215,7 @@ function App() {
   };
 
   const handlePairing = async () => {
-    const res = await fetch('/api/pair', {
+    const res = await fetch(`${API_URL}/api/pair`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: user.id, partnerCode: inputCode })

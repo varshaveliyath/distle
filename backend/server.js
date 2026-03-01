@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: "*" })); // Allow all origins for Vercel/Local dev
 app.use(express.json());
 
 // Serve static uploads
@@ -186,13 +186,7 @@ app.get('/api/partner-status/:userId', (req, res) => {
   res.json(partner);
 });
 
-// Serve frontend in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../frontend/dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, '../frontend', 'dist', 'index.html'));
-  });
-}
+// Served by Vercel; no local serving needed in this split deployment
 
 // Real-time synchronization
 io.on('connection', (socket) => {

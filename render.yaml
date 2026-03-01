@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: distle
+    env: node
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build && cd ../backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_PATH
+        value: ./data/distle.db
+    disk:
+      name: distle-db
+      mountPath: /opt/render/project/src/backend/data
+      sizeGB: 1

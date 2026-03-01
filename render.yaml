@@ -2,9 +2,10 @@ services:
   - type: web
     name: distle
     env: node
+    rootDir: backend
     plan: free
-    buildCommand: "npm run install:all && npm run build"
-    startCommand: "npm run start"
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production

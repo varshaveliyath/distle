@@ -1,5 +1,5 @@
 const CACHE_NAME = 'distle-cache-v1';
-let API_URL = 'http://localhost:3001';
+const API_URL = 'http://localhost:3001'; // Fallback for local dev
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -52,8 +52,7 @@ let currentUser = null;
 self.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'SET_USER') {
         currentUser = event.data.user;
-        if (event.data.apiUrl) API_URL = event.data.apiUrl;
-        console.log('SW received user & API:', currentUser, API_URL);
+        console.log('SW received user:', currentUser);
     }
 });
 

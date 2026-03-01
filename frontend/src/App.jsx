@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import './index.css';
 
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin);
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const socket = io(API_URL);
 
 function App() {
@@ -92,14 +92,14 @@ function App() {
         }
       });
 
-      setView('pairing');
+      if (parsedUser.pair_id) setView('dashboard');
+      else setView('pairing');
 
       // Sync user with SW for widgets
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
           type: 'SET_USER',
-          user: parsedUser,
-          apiUrl: API_URL
+          user: parsedUser
         });
       }
     }
@@ -124,9 +124,7 @@ function App() {
     try {
       const res = await fetch(`${API_URL}/api/partner-status/${uid}`);
       const data = await res.json();
-      if (data) {
-        setPartnerStatus(data);
-      }
+      if (data) setPartnerStatus(data);
     } catch (e) {
       console.error("Failed to sync partner status");
     }
@@ -242,20 +240,8 @@ function App() {
         localStorage.setItem('user', JSON.stringify(data));
         socket.emit('join', data.id);
         fetchPartnerStatus(data.id);
-
-        // Sync user with SW for widgets
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.controller.postMessage({
-            type: 'SET_USER',
-            user: data,
-            apiUrl: API_URL
-          });
-        }
-
-        if (data.pair_id) {
-          // Stay on pairing but update user
-        }
-        navigateTo('pairing');
+        if (data.pair_id) navigateTo('dashboard');
+        else navigateTo('pairing');
       } else {
         alert(data.error || 'Login failed. Please try again.');
       }

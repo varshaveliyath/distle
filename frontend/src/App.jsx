@@ -22,7 +22,8 @@ import {
   ChevronLeft,
   X,
   ShieldCheck,
-  Link
+  Link,
+  Download
 } from 'lucide-react';
 import './index.css';
 
@@ -95,6 +96,30 @@ function App() {
     }
   };
 
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http')) return url;
+    // Handle cases where the backend might just send the filename
+    return `${API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  const downloadImage = async (url, filename) => {
+    try {
+      const response = await fetch(getImageUrl(url));
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename || 'distle-moment.jpg';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      console.error("Download failed", e);
+    }
+  };
+
   useEffect(() => {
     if (user) {
       socket.on('distance-update', ({ distance, midpoint }) => {
@@ -104,7 +129,7 @@ function App() {
       });
 
       socket.on('partner-note-update', ({ note, streak }) => {
-        setPartnerStatus(prev => ({ ...prev, note, streak_count: streak !== undefined ? streak : prev.streak_count }));
+        setPartnerStatus(prev => ({ ...prev, note, streak, streak_count: streak !== undefined ? streak : prev.streak_count }));
       });
 
       socket.on('partner-photo-update', ({ photoUrl, streak }) => {
@@ -293,26 +318,36 @@ function App() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             {/* My Memory */}
             <div className="glass-panel" style={{ background: 'rgba(167, 139, 250, 0.05)', border: '1px solid rgba(167, 139, 250, 0.1)' }}>
-              <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--accent-violet)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '1rem' }}>Your Sync</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--accent-violet)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Your Sync</span>
+                {showHistory.mine?.photo_url && (
+                  <button onClick={() => downloadImage(showHistory.mine.photo_url, `my-memory-${showHistory.date}.jpg`)} style={{ background: 'transparent', border: 'none', color: 'var(--accent-violet)', cursor: 'pointer' }}><Download size={16} /></button>
+                )}
+              </div>
               <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '1rem', fontStyle: showHistory.mine?.note ? 'normal' : 'italic' }}>
                 {showHistory.mine?.note || "Silence in your sync cycle..."}
               </p>
               {showHistory.mine?.photo_url && (
                 <div className="media-card" style={{ width: '100%', aspectRatio: '16/9' }}>
-                  <img src={showHistory.mine.photo_url} alt="My Archive" />
+                  <img src={getImageUrl(showHistory.mine.photo_url)} alt="My Archive" />
                 </div>
               )}
             </div>
 
             {/* Partner's Memory */}
             <div className="glass-panel" style={{ background: 'rgba(244, 114, 182, 0.05)', border: '1px solid rgba(244, 114, 182, 0.1)' }}>
-              <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--accent-magenta)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '1rem' }}>Partner's Sync</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--accent-magenta)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Partner's Sync</span>
+                {showHistory.partner?.photo_url && (
+                  <button onClick={() => downloadImage(showHistory.partner.photo_url, `partner-memory-${showHistory.date}.jpg`)} style={{ background: 'transparent', border: 'none', color: 'var(--accent-magenta)', cursor: 'pointer' }}><Download size={16} /></button>
+                )}
+              </div>
               <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '1rem', fontStyle: showHistory.partner?.note ? 'normal' : 'italic' }}>
                 {showHistory.partner?.note || "Awaiting partner's transmission..."}
               </p>
               {showHistory.partner?.photo_url && (
                 <div className="media-card" style={{ width: '100%', aspectRatio: '16/9' }}>
-                  <img src={showHistory.partner.photo_url} alt="Partner Archive" />
+                  <img src={getImageUrl(showHistory.partner.photo_url)} alt="Partner Archive" />
                 </div>
               )}
             </div>
@@ -358,11 +393,21 @@ function App() {
               </div>
               <div className="shared-grid">
                 <div className="media-card">
-                  {user.photo_url ? <img src={user.photo_url} alt="You" /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', padding: '1rem', textAlign: 'center' }}>Awaiting capture...</div>}
+                  {user.photo_url ? (
+                    <>
+                      <img src={getImageUrl(user.photo_url)} alt="You" />
+                      <button onClick={() => downloadImage(user.photo_url, 'my-moment.jpg')} className="download-btn-overlay"><Download size={14} /></button>
+                    </>
+                  ) : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', padding: '1rem', textAlign: 'center' }}>Awaiting capture...</div>}
                   <div className="media-label">You</div>
                 </div>
                 <div className="media-card">
-                  {partnerStatus.photo_url ? <img src={partnerStatus.photo_url} alt="Partner" /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', padding: '1rem', textAlign: 'center' }}>Waiting for partner...</div>}
+                  {partnerStatus.photo_url ? (
+                    <>
+                      <img src={getImageUrl(partnerStatus.photo_url)} alt="Partner" />
+                      <button onClick={() => downloadImage(partnerStatus.photo_url, 'partner-moment.jpg')} className="download-btn-overlay"><Download size={14} /></button>
+                    </>
+                  ) : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', padding: '1rem', textAlign: 'center' }}>Waiting for partner...</div>}
                   <div className="media-label">Partner</div>
                 </div>
               </div>
@@ -389,10 +434,16 @@ function App() {
                 {partnerStatus.note || "Waiting for partner..."}
               </div>
 
-              <div className="note-input-container">
-                <input className="note-input" value={myNote} onChange={e => setMyNote(e.target.value)} placeholder="Share a thought..." onKeyPress={e => e.key === 'Enter' && updateMyNote()} />
-                <button style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', padding: '0.5rem' }} onClick={updateMyNote}>
-                  <Send size={20} />
+              <div className="note-input-section">
+                <textarea
+                  className="note-area"
+                  value={myNote}
+                  onChange={e => setMyNote(e.target.value)}
+                  placeholder="Share a thought..."
+                />
+                <button className="btn-send-center" onClick={updateMyNote}>
+                  <Send size={18} />
+                  Transmit Thought
                 </button>
               </div>
             </div>

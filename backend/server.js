@@ -13,7 +13,11 @@ app.use(cors({ origin: "*" })); // Allow all origins for Vercel/Local dev
 app.use(express.json());
 
 // Serve static uploads
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
 
 const server = http.createServer(app);
 const io = new Server(server, {

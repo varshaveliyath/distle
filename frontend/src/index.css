@@ -376,6 +376,83 @@ h2 {
     font-family: inherit;
 }
 
+/* Refined Thought UI */
+.note-input-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.note-area {
+    width: 100%;
+    min-height: 100px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--panel-border);
+    border-radius: 20px;
+    padding: 1.25rem 1.5rem;
+    color: var(--text-pure);
+    font-family: inherit;
+    font-size: 1rem;
+    outline: none;
+    resize: none;
+    transition: var(--transition-premium);
+}
+
+.note-area:focus {
+    border-color: var(--accent-violet);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 20px var(--accent-violet-glow);
+}
+
+.btn-send-center {
+    background: linear-gradient(135deg, var(--accent-violet), var(--accent-magenta));
+    color: white;
+    border: none;
+    border-radius: 100px;
+    padding: 1rem 2.5rem;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: var(--transition-premium);
+    box-shadow: 0 10px 25px rgba(167, 139, 250, 0.3);
+}
+
+.btn-send-center:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 15px 35px rgba(167, 139, 250, 0.4);
+}
+
+/* Download Overlay */
+.download-btn-overlay {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    cursor: pointer;
+    z-index: 5;
+    transition: var(--transition-premium);
+}
+
+.download-btn-overlay:hover {
+    background: var(--accent-violet);
+    transform: scale(1.1);
+}
+
 /* Profile View Styles */
 .profile-wrapper {
     display: flex;

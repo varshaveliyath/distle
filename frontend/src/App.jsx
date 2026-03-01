@@ -12,9 +12,6 @@ import {
   Navigation,
   CheckCircle2,
   Quote,
-  Smile,
-  Frown,
-  Meh,
   Compass,
   Map as MapIcon,
   Send,
@@ -23,7 +20,9 @@ import {
   Flame,
   Upload,
   ChevronLeft,
-  X
+  X,
+  ShieldCheck,
+  Link
 } from 'lucide-react';
 import './index.css';
 
@@ -46,8 +45,7 @@ function App() {
 
   // Daily states
   const [myNote, setMyNote] = useState('');
-  const [myMood, setMyMood] = useState('neutral');
-  const [partnerStatus, setPartnerStatus] = useState({ note: '', mood: 'neutral', photo_url: '', streak_count: 0 });
+  const [partnerStatus, setPartnerStatus] = useState({ note: '', photo_url: '', streak_count: 0 });
 
   // Archival states (Phase 3)
   const [showHistory, setShowHistory] = useState(null); // { date, note, photo_url } or null
@@ -60,7 +58,6 @@ function App() {
       const parsedUser = JSON.parse(savedUser);
       setUser(parsedUser);
       setMyNote(parsedUser.note || '');
-      setMyMood(parsedUser.mood || 'neutral');
       socket.emit('join', parsedUser.id);
       fetchPartnerStatus(parsedUser.id);
       if (parsedUser.pair_id) setView('dashboard');
@@ -110,10 +107,6 @@ function App() {
         setPartnerStatus(prev => ({ ...prev, note, streak_count: streak !== undefined ? streak : prev.streak_count }));
       });
 
-      socket.on('partner-mood-update', ({ mood }) => {
-        setPartnerStatus(prev => ({ ...prev, mood }));
-      });
-
       socket.on('partner-photo-update', ({ photoUrl, streak }) => {
         setPartnerStatus(prev => ({ ...prev, photo_url: photoUrl, streak_count: streak !== undefined ? streak : prev.streak_count }));
       });
@@ -136,7 +129,6 @@ function App() {
         navigator.geolocation.clearWatch(watchId);
         socket.off('distance-update');
         socket.off('partner-note-update');
-        socket.off('partner-mood-update');
         socket.off('partner-photo-update');
         clearInterval(interval);
       };
@@ -144,6 +136,10 @@ function App() {
   }, [user]);
 
   const handleAuth = async () => {
+    if (!username.trim() || !password.trim()) {
+      alert("Registration requires both a unique Access ID and a Passcode.");
+      return;
+    }
     const url = authMode === 'login' ? '/api/login' : '/api/register';
     const res = await fetch(`${API_URL}${url}`, {
       method: 'POST',
@@ -154,13 +150,12 @@ function App() {
     if (data.id) {
       setUser(data);
       setMyNote(data.note || '');
-      setMyMood(data.mood || 'neutral');
       localStorage.setItem('user', JSON.stringify(data));
       socket.emit('join', data.id);
       if (data.pair_id) setView('dashboard');
       else setView('pairing');
     } else {
-      alert(data.error || 'Something went wrong');
+      alert(data.error || 'Identity verification failed. Please try again.');
     }
   };
 
@@ -205,15 +200,6 @@ function App() {
     }
   };
 
-  const updateMyMood = async (mood) => {
-    setMyMood(mood);
-    await fetch(`${API_URL}/api/mood`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, mood })
-    });
-  };
-
   const handlePairing = async () => {
     const res = await fetch(`${API_URL}/api/pair`, {
       method: 'POST',
@@ -242,21 +228,21 @@ function App() {
       <div className="app-shell">
         <div className="scroll-area" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
-            <Sparkles size={48} color="var(--accent-violet)" style={{ marginBottom: '1rem' }} />
-            <h1>Distle</h1>
-            <p style={{ color: 'var(--text-muted)' }}>The definitive companion for long-distance love.</p>
+            <Sparkles size={64} color="var(--accent-violet)" style={{ marginBottom: '1.5rem', filter: 'drop-shadow(0 0 15px var(--accent-violet-glow))' }} />
+            <h1>distle</h1>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 500 }}>The definitive bridge for distant souls.</p>
           </div>
           <div className="glass-panel">
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '14px' }}>
-              <button style={{ flex: 1, padding: '0.75rem', border: 'none', background: authMode === 'login' ? 'rgba(255,255,255,0.05)' : 'transparent', color: 'white', fontWeight: 600, borderRadius: '12px', cursor: 'pointer' }} onClick={() => setAuthMode('login')}>Sign In</button>
-              <button style={{ flex: 1, padding: '0.75rem', border: 'none', background: authMode === 'register' ? 'rgba(255,255,255,0.05)' : 'transparent', color: 'white', fontWeight: 600, borderRadius: '12px', cursor: 'pointer' }} onClick={() => setAuthMode('register')}>Join</button>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', background: 'rgba(255,255,255,0.03)', padding: '6px', borderRadius: '18px' }}>
+              <button style={{ flex: 1, padding: '0.75rem', border: 'none', background: authMode === 'login' ? '#ffffff' : 'transparent', color: authMode === 'login' ? '#000000' : 'white', fontWeight: 700, borderRadius: '14px', cursor: 'pointer', transition: 'var(--transition-premium)' }} onClick={() => setAuthMode('login')}>Sign In</button>
+              <button style={{ flex: 1, padding: '0.75rem', border: 'none', background: authMode === 'register' ? '#ffffff' : 'transparent', color: authMode === 'register' ? '#000000' : 'white', fontWeight: 700, borderRadius: '14px', cursor: 'pointer', transition: 'var(--transition-premium)' }} onClick={() => setAuthMode('register')}>Join</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <input className="input-field" type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} />
-              <input className="input-field" type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <input className="input-field" type="text" placeholder="Access ID (Compulsory)" value={username} onChange={e => setUsername(e.target.value)} />
+              <input className="input-field" type="password" placeholder="Passcode (Compulsory)" value={password} onChange={e => setPassword(e.target.value)} />
               <button className="btn-primary" onClick={handleAuth}>
                 {authMode === 'login' ? <LogIn size={20} /> : <UserPlus size={20} />}
-                {authMode === 'login' ? 'Access Account' : 'Create Space'}
+                {authMode === 'login' ? 'Sync Profile' : 'Forge Link'}
               </button>
             </div>
           </div>
@@ -269,19 +255,19 @@ function App() {
     return (
       <div className="app-shell">
         <div className="scroll-area">
-          <div style={{ textAlign: 'center', margin: '3rem 0' }}>
-            <Link2 size={42} color="var(--accent-violet)" style={{ marginBottom: '1rem' }} />
-            <h1>Start Your Link</h1>
-            <p style={{ color: 'var(--text-muted)' }}>Connect with your partner to start the experience.</p>
+          <div style={{ textAlign: 'center', margin: '4rem 0' }}>
+            <Link2 size={56} color="var(--accent-violet)" style={{ marginBottom: '1.5rem', filter: 'drop-shadow(0 0 10px var(--accent-violet-glow))' }} />
+            <h1>Link Origins</h1>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Establish a dedicated channel with your partner.</p>
           </div>
           <div className="glass-panel" style={{ textAlign: 'center' }}>
-            <label style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, color: 'var(--text-muted)' }}>Your Link Code</label>
-            <div style={{ fontSize: '3rem', fontWeight: 800, margin: '1.5rem 0', letterSpacing: '0.3em', color: 'var(--accent-violet)' }}>{user.pairing_code}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '2rem' }}>
-              <input className="input-field" type="text" maxLength="6" value={inputCode} onChange={e => setInputCode(e.target.value)} placeholder="Enter Partner Code" />
+            <label style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.2em', fontWeight: 800, color: 'var(--text-muted)' }}>Shared Protocol Code</label>
+            <div style={{ fontSize: '3.5rem', fontWeight: 800, margin: '1.5rem 0', letterSpacing: '0.3em', color: '#ffffff' }}>{user.pairing_code}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '2.5rem' }}>
+              <input className="input-field" style={{ textAlign: 'center', letterSpacing: '0.5em', fontWeight: 800, fontSize: '1.2rem' }} type="text" maxLength="6" value={inputCode} onChange={e => setInputCode(e.target.value)} placeholder="000000" />
               <button className="btn-primary" onClick={handlePairing}>
-                <Sparkles size={20} />
-                Connect Worlds
+                <Navigation size={20} />
+                Initialize Link
               </button>
             </div>
           </div>
@@ -294,60 +280,127 @@ function App() {
     <div className="app-shell">
       {/* Interaction History Modal (Phase 3) */}
       {showHistory && (
-        <div className="history-overlay" style={{ position: 'absolute', inset: 0, background: 'var(--app-bg)', zIndex: 200, padding: '2rem', display: 'flex', flexDirection: 'column' }}>
-          <button onClick={() => setShowHistory(null)} style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', color: 'white', marginBottom: '2rem', cursor: 'pointer' }}>
+        <div className="history-overlay" style={{ position: 'absolute', inset: 0, background: 'var(--app-bg)', zIndex: 200, padding: '2rem', display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.5s ease-out', overflowY: 'auto' }}>
+          <button onClick={() => setShowHistory(null)} style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', color: 'white', marginBottom: '2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
             <ChevronLeft size={24} /> Back to Live
           </button>
-          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--accent-violet)', fontWeight: 800, letterSpacing: '0.2em' }}>ARCHIVED MEMORY</span>
-            <h2 style={{ marginTop: '0.5rem' }}>{showHistory.date}</h2>
+
+          <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--accent-violet)', fontWeight: 800, letterSpacing: '0.3em' }}>PROTOCOL ARCHIVE</span>
+            <h2 style={{ marginTop: '0.5rem', fontSize: '2rem' }}>{showHistory.date}</h2>
           </div>
-          <div className="glass-panel" style={{ background: 'rgba(255,255,255,0.02)' }}>
-            <Quote size={20} color="var(--accent-violet)" style={{ marginBottom: '1rem' }} />
-            <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>{showHistory.note || "No thought shared this day."}</p>
-          </div>
-          {showHistory.photo_url && (
-            <div className="glass-panel" style={{ padding: '0.5rem', background: 'rgba(255,255,255,0.02)' }}>
-              <img src={showHistory.photo_url} className="image-preview" alt="Archive" style={{ margin: 0 }} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            {/* My Memory */}
+            <div className="glass-panel" style={{ background: 'rgba(167, 139, 250, 0.05)', border: '1px solid rgba(167, 139, 250, 0.1)' }}>
+              <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--accent-violet)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '1rem' }}>Your Sync</span>
+              <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '1rem', fontStyle: showHistory.mine?.note ? 'normal' : 'italic' }}>
+                {showHistory.mine?.note || "Silence in your sync cycle..."}
+              </p>
+              {showHistory.mine?.photo_url && (
+                <div className="media-card" style={{ width: '100%', aspectRatio: '16/9' }}>
+                  <img src={showHistory.mine.photo_url} alt="My Archive" />
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Partner's Memory */}
+            <div className="glass-panel" style={{ background: 'rgba(244, 114, 182, 0.05)', border: '1px solid rgba(244, 114, 182, 0.1)' }}>
+              <span style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--accent-magenta)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: '1rem' }}>Partner's Sync</span>
+              <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '1rem', fontStyle: showHistory.partner?.note ? 'normal' : 'italic' }}>
+                {showHistory.partner?.note || "Awaiting partner's transmission..."}
+              </p>
+              {showHistory.partner?.photo_url && (
+                <div className="media-card" style={{ width: '100%', aspectRatio: '16/9' }}>
+                  <img src={showHistory.partner.photo_url} alt="Partner Archive" />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
-      <header style={{ padding: '1.25rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', background: 'rgba(9,9,11,0.5)', backdropFilter: 'blur(10px)', zIndex: 10 }}>
-        <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Heart size={20} fill="var(--accent-violet)" color="var(--accent-violet)" />
-          Distle
+      <header style={{ padding: '1.25rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', background: 'rgba(3,3,3,0.3)', backdropFilter: 'blur(10px)', zIndex: 10 }}>
+        <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontWeight: 800 }}>
+          <Heart size={24} fill="var(--accent-violet)" color="var(--accent-violet)" />
+          distle
         </h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--accent-magenta)', fontWeight: 800, fontSize: '0.9rem' }}>
-            <Flame size={18} fill="var(--accent-magenta)" />
-            {partnerStatus.streak_count || 0}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-magenta)', fontWeight: 800, fontSize: '1rem' }}>
+            <Flame size={20} fill="var(--accent-magenta)" />
+            {partnerStatus.streak_count || "-"}
           </div>
-          <div className="user-badge" style={{ background: 'rgba(255,255,255,0.05)', padding: '0.4rem 0.8rem', borderRadius: '100px', fontSize: '0.8rem', fontWeight: 700 }}>
+          <div className="user-badge" style={{ background: 'rgba(255,255,255,0.05)', padding: '0.5rem 1rem', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 800, border: '1px solid var(--panel-border)' }}>
             @{user.username}
           </div>
         </div>
       </header>
+
       <div className="scroll-area">
         {activeTab === 'distance' ? (
           <>
             <div className="distance-hero">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
                 <div className="telemetry-pulse"></div>
-                <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#10B981', letterSpacing: '0.1em' }}>LIVE CONNECTION</span>
+                <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#10B981', letterSpacing: '0.2em' }}>ACTIVE TELEMETRY</span>
               </div>
               <div className="distance-display">
-                <div className="dist-value">{distance !== null ? distance : '--'}</div>
-                <div className="dist-label">KM TO YOUR HEART</div>
+                <div className="dist-value">{distance !== null ? distance : '-'}</div>
+                <div className="dist-label">Kilometers Apart</div>
               </div>
-              {isTogether && (<div style={{ color: '#10B981', fontSize: '0.85rem', fontWeight: 800, marginTop: '0.5rem' }}>TOGETHER NOW ❤️</div>)}
+              {isTogether && (<div style={{ color: '#10B981', fontSize: '0.9rem', fontWeight: 800, marginTop: '1rem' }}>PROXIMITY SYNCED ❤️</div>)}
             </div>
 
             <div className="glass-panel">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                <CalendarIcon size={18} color="var(--accent-violet)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>STREAK PROGRESS</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <ImageIcon size={20} color="var(--accent-violet)" />
+                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>SHARED MOMENTS</span>
+              </div>
+              <div className="shared-grid">
+                <div className="media-card">
+                  {user.photo_url ? <img src={user.photo_url} alt="You" /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', padding: '1rem', textAlign: 'center' }}>Awaiting capture...</div>}
+                  <div className="media-label">You</div>
+                </div>
+                <div className="media-card">
+                  {partnerStatus.photo_url ? <img src={partnerStatus.photo_url} alt="Partner" /> : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', padding: '1rem', textAlign: 'center' }}>Waiting for partner...</div>}
+                  <div className="media-label">Partner</div>
+                </div>
+              </div>
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} accept="image/*" />
+              <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ marginTop: '1.5rem', width: '100%' }}>
+                {uploading ? <Sparkles className="animate-spin" size={18} /> : <Upload size={18} />}
+                {uploading ? 'Syncing...' : 'Upload Daily Sync'}
+              </button>
+            </div>
+
+            <div className="glass-panel">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <Quote size={20} color="var(--accent-violet)" />
+                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>SHARED THOUGHTS</span>
+              </div>
+
+              <div className="thought-bubble mine">
+                <span className="bubble-tag">Your Sync</span>
+                {user.note || "Silence is connecting..."}
+              </div>
+
+              <div className="thought-bubble partner">
+                <span className="bubble-tag">Partner's Sync</span>
+                {partnerStatus.note || "Waiting for partner..."}
+              </div>
+
+              <div className="note-input-container">
+                <input className="note-input" value={myNote} onChange={e => setMyNote(e.target.value)} placeholder="Share a thought..." onKeyPress={e => e.key === 'Enter' && updateMyNote()} />
+                <button style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', padding: '0.5rem' }} onClick={updateMyNote}>
+                  <Send size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="glass-panel">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <CalendarIcon size={20} color="var(--accent-violet)" />
+                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>SYNC STREAK</span>
               </div>
               <div className="streak-grid">
                 {[...Array(7)].map((_, i) => (
@@ -355,98 +408,79 @@ function App() {
                     key={i}
                     className={`streak-day ${(partnerStatus.streak_count || 0) > i ? 'active' : ''}`}
                     onClick={() => fetchHistory(i)}
-                    style={{ cursor: 'pointer' }}
                   >
                     {i + 1}
                   </div>
                 ))}
               </div>
-              <p style={{ marginTop: '1rem', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                Click a day to recall your shared memories!
+              <p style={{ marginTop: '1.5rem', fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'center', fontWeight: 600 }}>
+                Tap a sync point to retrieve archived memories.
               </p>
             </div>
 
-            <div className="glass-panel">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                <ImageIcon size={18} color="var(--accent-violet)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>PHOTO FOR THE DAY</span>
-              </div>
-              <input type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} accept="image/*" />
-              <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ width: '100%', marginBottom: partnerStatus.photo_url ? '1rem' : '0' }}>
-                {uploading ? <Sparkles className="animate-spin" size={18} /> : <Upload size={18} />}
-                {uploading ? 'Capturing Moment...' : 'Upload Daily Memory'}
-              </button>
-              {partnerStatus.photo_url && (<img src={partnerStatus.photo_url} className="image-preview" alt="Partner's Moment" />)}
-            </div>
-
-            <div className="glass-panel">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                <Quote size={18} color="var(--accent-violet)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>THOUGHT FOR THE DAY</span>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <input className="note-input" value={myNote} onChange={e => setMyNote(e.target.value)} placeholder="Type a message..." />
-                <button style={{ background: 'transparent', border: 'none', color: 'var(--accent-violet)', cursor: 'pointer' }} onClick={updateMyNote}>
-                  <Send size={20} />
-                </button>
-              </div>
-              <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--panel-border)' }}>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                  Partner says: <span style={{ color: 'var(--text-pure)', fontWeight: 700 }}>"{partnerStatus.note || "Nothing yet..."}"</span>
-                </p>
-              </div>
-            </div>
-
-            <div className="glass-panel">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                <Smile size={18} color="var(--accent-violet)" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>CURRENT MOOD</span>
-              </div>
-              <div className="mood-selector">
-                {['happy', 'neutral', 'sad', 'loved'].map(m => (
-                  <button key={m} className={`mood-btn ${myMood === m ? 'active' : ''}`} onClick={() => updateMyMood(m)}>
-                    {m === 'happy' ? <Smile size={20} /> : m === 'neutral' ? <Meh size={20} /> : m === 'sad' ? <Frown size={20} /> : <Heart size={20} />}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {midpoint && (
-              <div className="glass-panel" style={{ textAlign: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', justifyContent: 'center' }}>
-                  <Compass size={20} color="var(--accent-magenta)" />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>MEET IN THE MIDDLE</span>
+              <div className="glass-panel" style={{ textAlign: 'center', border: '1px solid var(--accent-magenta)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', justifyContent: 'center' }}>
+                  <Compass size={24} color="var(--accent-magenta)" />
+                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.1em' }}>CONVERGENCE POINT</span>
                 </div>
-                <p style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>Midpoint: ({midpoint.lat.toFixed(4)}, {midpoint.lon.toFixed(4)})</p>
-                <a href={`https://www.google.com/maps?q=${midpoint.lat},${midpoint.lon}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-violet)', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} > <MapIcon size={16} /> Get Directions </a>
+                <p style={{ fontSize: '1rem', marginBottom: '1.5rem', fontWeight: 600 }}>Celestial Midpoint Located</p>
+                <a href={`https://www.google.com/maps?q=${midpoint.lat},${midpoint.lon}`} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ textDecoration: 'none', color: 'white' }} > <MapIcon size={18} /> Plot Trajectory </a>
               </div>
             )}
           </>
         ) : (
-          <div className="profile-view">
-            <div className="glass-panel">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2rem' }}>
-                <User size={22} color="var(--accent-violet)" />
-                <h3 style={{ fontSize: '1.1rem' }}>Account Details</h3>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div>
-                  <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '0.25rem' }}>IDENTIFIER</span>
-                  <span style={{ fontSize: '1.1rem', fontWeight: 700 }}>{user.username}</span>
+          <div className="profile-wrapper">
+            <div className="profile-header">
+              <div className="avatar-large">{user.username?.charAt(0).toUpperCase()}</div>
+              <h1 style={{ marginBottom: '0.5rem' }}>{user.username}</h1>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Sync Established: {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</p>
+            </div>
+
+            <div className="profile-grid">
+              <div className="glass-panel profile-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <ShieldCheck size={20} color="var(--accent-violet)" />
+                  <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.1em' }}>SECURITY PROTOCOL</span>
                 </div>
-                <div>
-                  <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '0.25rem' }}>LINK CODE</span>
-                  <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-violet)' }}>{user.pairing_code}</span>
+                <div style={{ opacity: 0.8 }}>
+                  <p style={{ fontSize: '0.75rem', marginBottom: '0.5rem' }}>Access ID: <strong>{user.username}</strong></p>
+                  <p style={{ fontSize: '0.75rem' }}>Passcode: <strong>••••••••</strong></p>
                 </div>
               </div>
-              <button className="logout-btn" onClick={logout} style={{ marginTop: '3rem', width: '100%', padding: '1rem', background: 'transparent', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#EF4444', borderRadius: '16px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}> <LogOut size={20} /> Terminate Session </button>
+
+              <div className="glass-panel profile-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <Link size={20} color="var(--accent-magenta)" />
+                  <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.1em' }}>LINK PARTNER</span>
+                </div>
+                {partnerStatus.username ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div className="avatar-small">{partnerStatus.username.charAt(0).toUpperCase()}</div>
+                    <div>
+                      <p style={{ fontWeight: 700 }}>{partnerStatus.username}</p>
+                      <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Connected Channel</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No partner linked yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ marginTop: '1rem', textAlign: 'center' }}>
+              <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 800, marginBottom: '1rem', letterSpacing: '0.2em' }}>CONNECTION CODE</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '0.3em', marginBottom: '1.5rem' }}>{user.pairing_code}</div>
+              <button className="btn-secondary" onClick={logout} style={{ border: '1px solid rgba(239, 68, 68, 0.3)', color: '#EF4444' }}>
+                <LogOut size={18} /> Terminate Sync Session
+              </button>
             </div>
           </div>
         )}
       </div>
       <nav className="app-nav">
-        <div className={`nav-item ${activeTab === 'distance' ? 'active' : ''}`} onClick={() => setActiveTab('distance')}> <Navigation size={24} /> <span className="nav-text">DISTLE</span> </div>
-        <div className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}> <User size={24} /> <span className="nav-text">ACCOUNT</span> </div>
+        <div className={`nav-item ${activeTab === 'distance' ? 'active' : ''}`} onClick={() => setActiveTab('distance')}> <Navigation size={28} /> <span className="nav-text">LIVE</span> </div>
+        <div className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}> <User size={28} /> <span className="nav-text">CONFIG</span> </div>
       </nav>
     </div>
   );

@@ -55,6 +55,7 @@ db.exec(`
     last_note_date TEXT,
     last_photo_date TEXT,
     last_active TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -165,24 +166,27 @@ app.post('/api/photo', upload.single('photo'), (req, res) => {
   res.json({ success: true, photoUrl, streak });
 });
 
-app.post('/api/mood', (req, res) => {
-  const { userId, mood } = req.body;
-  db.prepare('UPDATE users SET mood = ? WHERE id = ?').run(mood, userId);
-  const user = db.prepare('SELECT pair_id FROM users WHERE id = ?').get(userId);
-  if (user && user.pair_id) io.to(user.pair_id).emit('partner-mood-update', { mood });
-  res.json({ success: true });
-});
-
 app.get('/api/history/:userId/:date', (req, res) => {
   const { userId, date } = req.params;
-  const item = db.prepare('SELECT * FROM history WHERE user_id = ? AND date = ?').get(userId, date);
-  res.json(item || {});
+  const user = db.prepare('SELECT pair_id FROM users WHERE id = ?').get(userId);
+
+  const myItem = db.prepare('SELECT note, photo_url FROM history WHERE user_id = ? AND date = ?').get(userId, date) || {};
+  let partnerItem = {};
+
+  if (user && user.pair_id) {
+    partnerItem = db.prepare('SELECT note, photo_url FROM history WHERE user_id = ? AND date = ?').get(user.pair_id, date) || {};
+  }
+
+  res.json({
+    mine: myItem,
+    partner: partnerItem
+  });
 });
 
 app.get('/api/partner-status/:userId', (req, res) => {
   const user = db.prepare('SELECT pair_id FROM users WHERE id = ?').get(req.params.userId);
   if (!user || !user.pair_id) return res.json({});
-  const partner = db.prepare('SELECT note, mood, lat, lon, photo_url, streak_count, last_active FROM users WHERE id = ?').get(user.pair_id);
+  const partner = db.prepare('SELECT username, note, lat, lon, photo_url, streak_count, last_active, created_at FROM users WHERE id = ?').get(user.pair_id);
   res.json(partner);
 });
 

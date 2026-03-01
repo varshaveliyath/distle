@@ -51,6 +51,7 @@ function App() {
   // Archival states (Phase 3)
   const [showHistory, setShowHistory] = useState(null); // { date, note, photo_url } or null
   const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -61,10 +62,38 @@ function App() {
       setMyNote(parsedUser.note || '');
       socket.emit('join', parsedUser.id);
       fetchPartnerStatus(parsedUser.id);
+
+      // Sync latest profile from backend
+      fetch(`${API_URL}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: parsedUser.username, password: parsedUser.password })
+      }).then(res => res.json()).then(data => {
+        if (data.id) {
+          setUser(data);
+          localStorage.setItem('user', JSON.stringify(data));
+        }
+      });
+
       if (parsedUser.pair_id) setView('dashboard');
       else setView('pairing');
     }
+
+    // Handle back button
+    const handlePopState = (e) => {
+      if (e.state && e.state.view) {
+        setView(e.state.view);
+        if (e.state.view !== 'dashboard') setShowHistory(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  const navigateTo = (newView) => {
+    setView(newView);
+    window.history.pushState({ view: newView }, '', '');
+  };
 
   const fetchPartnerStatus = async (uid) => {
     try {
@@ -99,8 +128,8 @@ function App() {
   const getImageUrl = (url) => {
     if (!url) return null;
     if (url.startsWith('http')) return url;
-    // Handle cases where the backend might just send the filename
-    return `${API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    const cleanUrl = url.startsWith('/') ? url : `/${url}`;
+    return `${API_URL}${cleanUrl}`;
   };
 
   const downloadImage = async (url, filename) => {
@@ -162,39 +191,55 @@ function App() {
 
   const handleAuth = async () => {
     if (!username.trim() || !password.trim()) {
-      alert("Registration requires both a unique Access ID and a Passcode.");
+      alert("Registration requires both a unique User ID and a Password.");
       return;
     }
-    const url = authMode === 'login' ? '/api/login' : '/api/register';
-    const res = await fetch(`${API_URL}${url}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-    if (data.id) {
-      setUser(data);
-      setMyNote(data.note || '');
-      localStorage.setItem('user', JSON.stringify(data));
-      socket.emit('join', data.id);
-      if (data.pair_id) setView('dashboard');
-      else setView('pairing');
-    } else {
-      alert(data.error || 'Identity verification failed. Please try again.');
+    setLoading(true);
+    try {
+      const url = authMode === 'login' ? '/api/login' : '/api/register';
+      const res = await fetch(`${API_URL}${url}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (data.id) {
+        setUser(data);
+        setMyNote(data.note || '');
+        localStorage.setItem('user', JSON.stringify(data));
+        socket.emit('join', data.id);
+        if (data.pair_id) navigateTo('dashboard');
+        else navigateTo('pairing');
+      } else {
+        alert(data.error || 'Login failed. Please try again.');
+      }
+    } catch (e) {
+      alert("Error connecting to server.");
+    } finally {
+      setLoading(false);
     }
   };
 
   const updateMyNote = async () => {
-    const res = await fetch(`${API_URL}/api/note`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, note: myNote })
-    });
-    const data = await res.json();
-    const updatedUser = { ...user, note: myNote, streak_count: data.streak };
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    setPartnerStatus(p => ({ ...p, streak_count: data.streak }));
+    if (!myNote.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/note`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, note: myNote })
+      });
+      const data = await res.json();
+      const updatedUser = { ...user, note: myNote, streak_count: data.streak };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setPartnerStatus(p => ({ ...p, streak_count: data.streak }));
+      setMyNote(''); // Reset input area to empty
+    } catch (e) {
+      console.error("Failed to send thought");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleFileUpload = async (e) => {
@@ -226,26 +271,34 @@ function App() {
   };
 
   const handlePairing = async () => {
-    const res = await fetch(`${API_URL}/api/pair`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, partnerCode: inputCode })
-    });
-    const data = await res.json();
-    if (data.success) {
-      const updatedUser = { ...user, pair_id: data.partnerId };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      setView('dashboard');
-    } else {
-      alert(data.message);
+    if (!inputCode.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/pair`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, partnerCode: inputCode })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const updatedUser = { ...user, pair_id: data.partnerId };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        navigateTo('dashboard');
+      } else {
+        alert(data.message);
+      }
+    } catch (e) {
+      alert("Pairing failed.");
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = () => {
     localStorage.clear();
     setUser(null);
-    setView('auth');
+    navigateTo('auth');
   };
 
   if (view === 'auth') {
@@ -259,15 +312,15 @@ function App() {
           </div>
           <div className="glass-panel">
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', background: 'rgba(255,255,255,0.03)', padding: '6px', borderRadius: '18px' }}>
-              <button style={{ flex: 1, padding: '0.75rem', border: 'none', background: authMode === 'login' ? '#ffffff' : 'transparent', color: authMode === 'login' ? '#000000' : 'white', fontWeight: 700, borderRadius: '14px', cursor: 'pointer', transition: 'var(--transition-premium)' }} onClick={() => setAuthMode('login')}>Sign In</button>
-              <button style={{ flex: 1, padding: '0.75rem', border: 'none', background: authMode === 'register' ? '#ffffff' : 'transparent', color: authMode === 'register' ? '#000000' : 'white', fontWeight: 700, borderRadius: '14px', cursor: 'pointer', transition: 'var(--transition-premium)' }} onClick={() => setAuthMode('register')}>Join</button>
+              <button style={{ flex: 1, padding: '0.75rem', border: 'none', background: authMode === 'login' ? '#ffffff' : 'transparent', color: authMode === 'login' ? '#000000' : 'white', fontWeight: 700, borderRadius: '14px', cursor: 'pointer', transition: 'var(--transition-premium)' }} onClick={() => setAuthMode('login')}>Login</button>
+              <button style={{ flex: 1, padding: '0.75rem', border: 'none', background: authMode === 'register' ? '#ffffff' : 'transparent', color: authMode === 'register' ? '#000000' : 'white', fontWeight: 700, borderRadius: '14px', cursor: 'pointer', transition: 'var(--transition-premium)' }} onClick={() => setAuthMode('register')}>Register</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              <input className="input-field" type="text" placeholder="Access ID (Compulsory)" value={username} onChange={e => setUsername(e.target.value)} />
-              <input className="input-field" type="password" placeholder="Passcode (Compulsory)" value={password} onChange={e => setPassword(e.target.value)} />
-              <button className="btn-primary" onClick={handleAuth}>
-                {authMode === 'login' ? <LogIn size={20} /> : <UserPlus size={20} />}
-                {authMode === 'login' ? 'Sync Profile' : 'Forge Link'}
+              <input className="input-field" type="text" placeholder="User ID" value={username} onChange={e => setUsername(e.target.value)} />
+              <input className="input-field" type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
+              <button className={`btn-primary ${loading ? 'btn-loading' : ''}`} onClick={handleAuth}>
+                {loading ? <div className="loading-spinner"></div> : (authMode === 'login' ? <LogIn size={20} /> : <UserPlus size={20} />)}
+                {loading ? 'Processing...' : (authMode === 'login' ? 'Login' : 'Register')}
               </button>
             </div>
           </div>
@@ -282,17 +335,17 @@ function App() {
         <div className="scroll-area">
           <div style={{ textAlign: 'center', margin: '4rem 0' }}>
             <Link2 size={56} color="var(--accent-violet)" style={{ marginBottom: '1.5rem', filter: 'drop-shadow(0 0 10px var(--accent-violet-glow))' }} />
-            <h1>Link Origins</h1>
-            <p style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Establish a dedicated channel with your partner.</p>
+            <h1>Pair With Partner</h1>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 500 }}>Connect with your partner.</p>
           </div>
           <div className="glass-panel" style={{ textAlign: 'center' }}>
-            <label style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.2em', fontWeight: 800, color: 'var(--text-muted)' }}>Shared Protocol Code</label>
+            <label style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.2em', fontWeight: 800, color: 'var(--text-muted)' }}>Your Code</label>
             <div style={{ fontSize: '3.5rem', fontWeight: 800, margin: '1.5rem 0', letterSpacing: '0.3em', color: '#ffffff' }}>{user.pairing_code}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '2.5rem' }}>
               <input className="input-field" style={{ textAlign: 'center', letterSpacing: '0.5em', fontWeight: 800, fontSize: '1.2rem' }} type="text" maxLength="6" value={inputCode} onChange={e => setInputCode(e.target.value)} placeholder="000000" />
-              <button className="btn-primary" onClick={handlePairing}>
-                <Navigation size={20} />
-                Initialize Link
+              <button className={`btn-primary ${loading ? 'btn-loading' : ''}`} onClick={handlePairing}>
+                {loading ? <div className="loading-spinner"></div> : <Navigation size={20} />}
+                {loading ? 'Linking...' : 'Register Partner'}
               </button>
             </div>
           </div>
@@ -408,13 +461,13 @@ function App() {
                       <button onClick={() => downloadImage(partnerStatus.photo_url, 'partner-moment.jpg')} className="download-btn-overlay"><Download size={14} /></button>
                     </>
                   ) : <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', padding: '1rem', textAlign: 'center' }}>Waiting for partner...</div>}
-                  <div className="media-label">Partner</div>
+                  <div className="media-label">{partnerStatus.username || 'Partner'}</div>
                 </div>
               </div>
               <input type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} accept="image/*" />
-              <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} style={{ marginTop: '1.5rem', width: '100%' }}>
-                {uploading ? <Sparkles className="animate-spin" size={18} /> : <Upload size={18} />}
-                {uploading ? 'Syncing...' : 'Upload Daily Sync'}
+              <button className={`btn-secondary ${uploading ? 'btn-loading' : ''}`} onClick={() => fileInputRef.current?.click()} style={{ marginTop: '1.5rem', width: '100%' }}>
+                {uploading ? <div className="loading-spinner" style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: 'var(--accent-violet)' }}></div> : <Upload size={18} />}
+                {uploading ? 'Uploading...' : 'Upload Image'}
               </button>
             </div>
 
@@ -441,9 +494,9 @@ function App() {
                   onChange={e => setMyNote(e.target.value)}
                   placeholder="Share a thought..."
                 />
-                <button className="btn-send-center" onClick={updateMyNote}>
-                  <Send size={18} />
-                  Transmit Thought
+                <button className={`btn-send-center ${loading ? 'btn-loading' : ''}`} onClick={updateMyNote}>
+                  {loading ? <div className="loading-spinner"></div> : <Send size={18} />}
+                  {loading ? 'Sending...' : 'Send'}
                 </button>
               </div>
             </div>

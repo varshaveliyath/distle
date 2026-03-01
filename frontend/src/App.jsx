@@ -89,14 +89,10 @@ function App() {
         if (data.id) {
           setUser(data);
           localStorage.setItem('user', JSON.stringify(data));
-          if (data.pair_id && view === 'pairing') {
-            setView('dashboard');
-          }
         }
       });
 
-      if (parsedUser.pair_id) setView('dashboard');
-      else setView('pairing');
+      setView('pairing');
 
       // Sync user with SW for widgets
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
@@ -130,7 +126,6 @@ function App() {
       const data = await res.json();
       if (data) {
         setPartnerStatus(data);
-        if (view === 'pairing') navigateTo('dashboard');
       }
     } catch (e) {
       console.error("Failed to sync partner status");
@@ -257,8 +252,10 @@ function App() {
           });
         }
 
-        if (data.pair_id) navigateTo('dashboard');
-        else navigateTo('pairing');
+        if (data.pair_id) {
+          // Stay on pairing but update user
+        }
+        navigateTo('pairing');
       } else {
         alert(data.error || 'Login failed. Please try again.');
       }

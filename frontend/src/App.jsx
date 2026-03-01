@@ -102,7 +102,8 @@ function App() {
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
           type: 'SET_USER',
-          user: parsedUser
+          user: parsedUser,
+          apiUrl: API_URL
         });
       }
     }
@@ -246,6 +247,16 @@ function App() {
         localStorage.setItem('user', JSON.stringify(data));
         socket.emit('join', data.id);
         fetchPartnerStatus(data.id);
+
+        // Sync user with SW for widgets
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'SET_USER',
+            user: data,
+            apiUrl: API_URL
+          });
+        }
+
         if (data.pair_id) navigateTo('dashboard');
         else navigateTo('pairing');
       } else {

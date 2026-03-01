@@ -58,6 +58,7 @@ db.exec(`
     streak_count INTEGER DEFAULT 0,
     last_note_date TEXT,
     last_photo_date TEXT,
+    accuracy REAL DEFAULT 0,
     last_active TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -193,21 +194,141 @@ app.get('/api/partner-status/:userId', (req, res) => {
   res.json(partner);
 });
 
+// --- Admin Panel API ---
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  console.log(`Admin login attempt at ${new Date().toISOString()}`);
+  if (password === ADMIN_PASSWORD) {
+    console.log("Admin login successful");
+    res.json({ success: true, token: 'admin-session-active' });
+  } else {
+    console.log("Admin login failed: Invalid password");
+    res.status(401).json({ error: 'Invalid admin password' });
+  }
+});
+
+app.get('/api/admin/databases', (req, res) => {
+  try {
+    const backendFiles = fs.readdirSync(__dirname).filter(f => f.endsWith('.db')).map(f => path.join('backend', f));
+    const rootFiles = fs.readdirSync(path.join(__dirname, '..')).filter(f => f.endsWith('.db')).map(f => f);
+
+    // De-duplicate and return absolute paths or just names
+    const allDbs = [...new Set([...backendFiles, ...rootFiles])];
+    res.json(allDbs);
+  } catch (err) {
+    console.error("Failed to list databases:", err);
+    res.status(500).json({ error: 'Failed to list databases' });
+  }
+});
+
+app.get('/api/admin/tables', (req, res) => {
+  const dbName = req.query.db;
+  if (!dbName) return res.status(400).json({ error: 'Missing db query parameter' });
+
+  const dbFilePath = path.join(__dirname, '..', dbName);
+
+  if (!fs.existsSync(dbFilePath)) {
+    console.error(`Database not found: ${dbFilePath}`);
+    return res.status(404).json({ error: 'Database not found' });
+  }
+
+  try {
+    const tempDb = new Database(dbFilePath);
+    const tables = tempDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+    tempDb.close();
+    res.json(tables.map(t => t.name));
+  } catch (err) {
+    console.error(`Failed to list tables for ${dbFilePath}:`, err);
+    res.status(500).json({ error: 'Failed to list tables' });
+  }
+});
+
+app.get('/api/admin/data', (req, res) => {
+  const dbName = req.query.db;
+  const tableName = req.query.table;
+
+  if (!dbName || !tableName) return res.status(400).json({ error: 'Missing db or table query parameter' });
+
+  const dbFilePath = path.join(__dirname, '..', dbName);
+
+  if (!fs.existsSync(dbFilePath)) return res.status(404).json({ error: 'Database not found' });
+
+  try {
+    const tempDb = new Database(dbFilePath);
+    const rows = tempDb.prepare(`SELECT * FROM ${tableName} LIMIT 100`).all();
+    tempDb.close();
+    res.json(rows);
+  } catch (err) {
+    console.error(`Failed to fetch data from ${tableName} in ${dbFilePath}:`, err);
+    res.status(500).json({ error: 'Failed to fetch table data' });
+  }
+});
+
+app.delete('/api/admin/row', (req, res) => {
+  const { db, table, column, value } = req.body;
+  if (!db || !table || !column || value === undefined) {
+    return res.status(400).json({ error: 'Missing required parameters (db, table, column, value)' });
+  }
+
+  const dbFilePath = path.join(__dirname, '..', db);
+  if (!fs.existsSync(dbFilePath)) return res.status(404).json({ error: 'Database not found' });
+
+  try {
+    const tempDb = new Database(dbFilePath);
+    const stmt = tempDb.prepare(`DELETE FROM ${table} WHERE ${column} = ?`);
+    const result = stmt.run(value);
+    tempDb.close();
+
+    if (result.changes > 0) {
+      console.log(`Admin deleted row from ${table} where ${column}=${value}`);
+      res.json({ success: true, changes: result.changes });
+    } else {
+      res.status(404).json({ error: 'No row found to delete' });
+    }
+  } catch (err) {
+    console.error(`Failed to delete row from ${table}:`, err);
+    res.status(500).json({ error: 'Failed to delete row' });
+  }
+});
+
+app.get('/api/distance/:userId', (req, res) => {
+  const userId = req.params.userId;
+  const user = db.prepare('SELECT lat, lon, pair_id FROM users WHERE id = ?').get(userId);
+  if (!user || !user.pair_id) return res.json({ distance: null });
+
+  const partner = db.prepare('SELECT lat, lon FROM users WHERE id = ?').get(user.pair_id);
+  if (!partner || user.lat === null || partner.lat === null) return res.json({ distance: null });
+
+  const distance = calculateDistance(user.lat, user.lon, partner.lat, partner.lon);
+  res.json({ distance: distance.toFixed(2), unit: 'km' });
+});
+
 // Served by Vercel; no local serving needed in this split deployment
 
 // Real-time synchronization
 io.on('connection', (socket) => {
   socket.on('join', (userId) => socket.join(userId));
-  socket.on('update-location', ({ userId, lat, lon }) => {
-    db.prepare('UPDATE users SET lat = ?, lon = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?').run(lat, lon, userId);
+  socket.on('update-location', ({ userId, lat, lon, accuracy }) => {
+    // Basic filtering: ignore updates with accuracy > 100 meters if possible,
+    // but always save the very first one.
+    const lastUser = db.prepare('SELECT lat, accuracy FROM users WHERE id = ?').get(userId);
+    if (accuracy > 100 && lastUser && lastUser.lat !== null && lastUser.accuracy < accuracy) {
+      console.log(`Ignoring low accuracy update for ${userId}: ${accuracy}m`);
+      return;
+    }
+
+    db.prepare('UPDATE users SET lat = ?, lon = ?, accuracy = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?').run(lat, lon, accuracy, userId);
     const user = db.prepare('SELECT pair_id FROM users WHERE id = ?').get(userId);
     if (user && user.pair_id) {
-      const partner = db.prepare('SELECT lat, lon FROM users WHERE id = ?').get(user.pair_id);
+      const partner = db.prepare('SELECT lat, lon, accuracy FROM users WHERE id = ?').get(user.pair_id);
       if (partner && partner.lat !== null) {
         const distance = calculateDistance(lat, lon, partner.lat, partner.lon);
         const midpoint = { lat: (lat + partner.lat) / 2, lon: (lon + partner.lon) / 2 };
-        io.to(userId).emit('distance-update', { distance, midpoint });
-        io.to(user.pair_id).emit('distance-update', { distance, midpoint });
+        const combinedAccuracy = Math.max(accuracy || 0, partner.accuracy || 0);
+        io.to(userId).emit('distance-update', { distance, midpoint, accuracy: combinedAccuracy });
+        io.to(user.pair_id).emit('distance-update', { distance, midpoint, accuracy: combinedAccuracy });
       }
     }
   });

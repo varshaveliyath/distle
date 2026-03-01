@@ -536,3 +536,51 @@ h2 {
     border-top-color: white;
     animation: spin 0.8s linear infinite;
 }
+
+/* Admin Dashboard Specifics */
+.admin-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+}
+
+.admin-table th {
+    text-align: left;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.admin-table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    color: var(--text-pure);
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-table tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.admin-table th:first-child {
+    border-top-left-radius: 12px;
+}
+
+.admin-table th:last-child {
+    border-top-right-radius: 12px;
+}
+
+@media (min-width: 801px) {
+    .app-shell[style*="max-width: 800px"] {
+        max-width: 1000px !important;
+    }
+}

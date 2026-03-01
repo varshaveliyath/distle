@@ -1,0 +1,42 @@
+{
+    "name": "distle",
+    "short_name": "distle",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#030303",
+    "theme_color": "#a78bfa",
+    "icons": [
+        {
+            "src": "icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "widgets": [
+        {
+            "name": "Distance Widget",
+            "description": "See the distance to your partner on your home screen.",
+            "tag": "distance-widget",
+            "template": "distance-template",
+            "msAcTemplate": "distance-template.json",
+            "data": "distance-data.json",
+            "type": "application/json",
+            "screenshots": [
+                {
+                    "src": "icon-512.png",
+                    "sizes": "512x512",
+                    "type": "image/png",
+                    "label": "Distance Widget Screenshot"
+                }
+            ],
+            "icons": [
+                {
+                    "src": "icon-512.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
+        }
+    ]
+}

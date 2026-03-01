@@ -23,7 +23,13 @@ import {
   X,
   ShieldCheck,
   Link,
-  Download
+  Download,
+  Database as DatabaseIcon,
+  Table,
+  Eye,
+  EyeOff,
+  Key,
+  Trash2
 } from 'lucide-react';
 import './index.css';
 
@@ -32,8 +38,15 @@ const socket = io(API_URL);
 
 function App() {
   const [user, setUser] = useState(null);
-  const [view, setView] = useState('auth'); // auth, pairing, dashboard
+  const [view, setView] = useState('auth'); // auth, pairing, dashboard, admin_login, admin_dashboard
   const [activeTab, setActiveTab] = useState('distance'); // distance, profile
+  const [adminToken, setAdminToken] = useState(localStorage.getItem('adminToken'));
+  const [adminPassword, setAdminPassword] = useState('');
+  const [databases, setDatabases] = useState([]);
+  const [selectedDb, setSelectedDb] = useState(null);
+  const [tables, setTables] = useState([]);
+  const [selectedTable, setSelectedTable] = useState(null);
+  const [tableData, setTableData] = useState([]);
   const [authMode, setAuthMode] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -43,20 +56,24 @@ function App() {
   const [distance, setDistance] = useState(null);
   const [midpoint, setMidpoint] = useState(null);
   const [isTogether, setIsTogether] = useState(false);
-
-  // Daily states
+  const [accuracy, setAccuracy] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [myNote, setMyNote] = useState('');
   const [partnerStatus, setPartnerStatus] = useState({ note: '', photo_url: '', streak_count: 0 });
 
   // Archival states (Phase 3)
   const [showHistory, setShowHistory] = useState(null); // { date, note, photo_url } or null
   const [uploading, setUploading] = useState(false);
-  const [loading, setLoading] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
-    if (savedUser) {
+    if (window.location.pathname === '/admin') {
+      if (adminToken) setView('admin_dashboard');
+      else setView('admin_login');
+    } else if (savedUser) {
       const parsedUser = JSON.parse(savedUser);
       setUser(parsedUser);
       setMyNote(parsedUser.note || '');
@@ -77,6 +94,14 @@ function App() {
 
       if (parsedUser.pair_id) setView('dashboard');
       else setView('pairing');
+
+      // Sync user with SW for widgets
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SET_USER',
+          user: parsedUser
+        });
+      }
     }
 
     // Handle back button
@@ -151,10 +176,11 @@ function App() {
 
   useEffect(() => {
     if (user) {
-      socket.on('distance-update', ({ distance, midpoint }) => {
+      socket.on('distance-update', ({ distance, midpoint, accuracy }) => {
         setDistance(distance.toFixed(2));
         setMidpoint(midpoint);
         setIsTogether(distance < 0.05);
+        if (accuracy) setAccuracy(accuracy);
       });
 
       socket.on('partner-note-update', ({ note, streak }) => {
@@ -170,11 +196,16 @@ function App() {
           socket.emit('update-location', {
             userId: user.id,
             lat: position.coords.latitude,
-            lon: position.coords.longitude
+            lon: position.coords.longitude,
+            accuracy: position.coords.accuracy
           });
         },
         (err) => console.error(err),
-        { enableHighAccuracy: true }
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 5000
+        }
       );
 
       const interval = setInterval(() => fetchPartnerStatus(user.id), 15000);
@@ -208,6 +239,7 @@ function App() {
         setMyNote(data.note || '');
         localStorage.setItem('user', JSON.stringify(data));
         socket.emit('join', data.id);
+        fetchPartnerStatus(data.id);
         if (data.pair_id) navigateTo('dashboard');
         else navigateTo('pairing');
       } else {
@@ -298,8 +330,267 @@ function App() {
   const logout = () => {
     localStorage.clear();
     setUser(null);
+    setAdminToken(null);
+    setUsername('');
+    setPassword('');
+    setInputCode('');
+    setDistance(null);
+    setAccuracy(null);
+    setPartnerStatus({ note: '', photo_url: '', streak_count: 0 });
     navigateTo('auth');
   };
+
+  const handleAdminLogin = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAdminToken(data.token);
+        localStorage.setItem('adminToken', data.token);
+        setView('admin_dashboard');
+      } else {
+        alert(data.error);
+      }
+    } catch (e) {
+      alert("Admin login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchDatabases = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/databases`);
+      const data = await res.json();
+      setDatabases(data);
+    } catch (e) { console.error("Failed to fetch databases"); }
+  };
+
+  const fetchTables = async (dbName) => {
+    setSelectedDb(dbName);
+    setSelectedTable(null);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/tables?db=${dbName}`);
+      const data = await res.json();
+      setTables(data);
+    } catch (e) { console.error("Failed to fetch tables"); }
+  };
+
+  const fetchTableData = async (dbName, tableName) => {
+    setSelectedTable(tableName);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/data?db=${dbName}&table=${tableName}`);
+      const data = await res.json();
+      setTableData(data);
+    } catch (e) { console.error("Failed to fetch table data"); }
+  };
+
+  const handleDeleteRow = async (rowIndex) => {
+    const row = tableData[rowIndex];
+    // Find a suitable ID column (id, username, user_id, or just the first key)
+    const idKey = Object.keys(row).find(k => ['id', 'username', 'user_id'].includes(k.toLowerCase())) || Object.keys(row)[0];
+    const idValue = row[idKey];
+
+    if (!window.confirm(`Are you sure you want to delete this row where ${idKey}='${idValue}'?`)) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/row`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          db: selectedDb,
+          table: selectedTable,
+          column: idKey,
+          value: idValue
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTableData(prev => prev.filter((_, i) => i !== rowIndex));
+      } else {
+        alert(data.error);
+      }
+    } catch (e) {
+      alert("Delete failed");
+    }
+  };
+
+  useEffect(() => {
+    if (view === 'admin_dashboard') {
+      fetchDatabases();
+    }
+  }, [view]);
+
+  if (view === 'admin_login') {
+    return (
+      <div className="app-shell">
+        <div className="scroll-area" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <Key size={64} color="var(--accent-violet)" style={{ marginBottom: '1.5rem', filter: 'drop-shadow(0 0 15px var(--accent-violet-glow))' }} />
+            <h1>Admin</h1>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 500 }}>System Access Protocol</p>
+          </div>
+          <div className="glass-panel">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div style={{ position: 'relative' }}>
+                <input
+                  className="input-field"
+                  type={showAdminPassword ? "text" : "password"}
+                  placeholder="Admin Password"
+                  value={adminPassword}
+                  onChange={e => setAdminPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAdminLogin()}
+                  style={{ paddingRight: '3rem' }}
+                />
+                <button
+                  onClick={() => setShowAdminPassword(!showAdminPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '1rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '4px'
+                  }}
+                  type="button"
+                >
+                  {showAdminPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                </button>
+              </div>
+              <button className={`btn-primary ${loading ? 'btn-loading' : ''}`} onClick={handleAdminLogin}>
+                {loading ? <div className="loading-spinner"></div> : <ShieldCheck size={20} />}
+                {loading ? 'Verifying...' : 'Access Terminal'}
+              </button>
+              <button className="btn-secondary" onClick={() => (window.location.href = '/')}>Back to App</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view === 'admin_dashboard') {
+    return (
+      <div className="app-shell" style={{ maxWidth: '800px', maxHeight: 'none' }}>
+        <header style={{ padding: '1.25rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--panel-border)', background: 'rgba(3,3,3,0.3)', backdropFilter: 'blur(10px)' }}>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontWeight: 800 }}>
+            <DatabaseIcon size={24} color="var(--accent-violet)" />
+            Admin Dashboard
+          </h2>
+          <button className="btn-secondary" style={{ width: 'auto', padding: '0.5rem 1rem' }} onClick={logout}>Logout</button>
+        </header>
+
+        <div className="scroll-area">
+          <div style={{ display: 'grid', gridTemplateColumns: selectedDb ? '200px 1fr' : '1fr', gap: '1.5rem', height: '100%' }}>
+            {/* Sidebar / DB List */}
+            <div className="glass-panel" style={{ padding: '1rem' }}>
+              <h3 style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '1rem', textTransform: 'uppercase' }}>Databases</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {databases.map(db => (
+                  <button
+                    key={db}
+                    onClick={() => fetchTables(db)}
+                    style={{
+                      padding: '0.75rem',
+                      background: selectedDb === db ? 'var(--accent-violet)' : 'rgba(255,255,255,0.03)',
+                      color: selectedDb === db ? 'black' : 'white',
+                      border: 'none',
+                      borderRadius: '12px',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontWeight: 600
+                    }}
+                  >
+                    {db}
+                  </button>
+                ))}
+              </div>
+
+              {selectedDb && (
+                <>
+                  <h3 style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '1.5rem 0 1rem', textTransform: 'uppercase' }}>Tables</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {tables.map(table => (
+                      <button
+                        key={table}
+                        onClick={() => fetchTableData(selectedDb, table)}
+                        style={{
+                          padding: '0.75rem',
+                          background: selectedTable === table ? 'var(--accent-magenta)' : 'rgba(255,255,255,0.03)',
+                          color: selectedTable === table ? 'black' : 'white',
+                          border: 'none',
+                          borderRadius: '12px',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        <Table size={14} style={{ marginRight: '0.5rem' }} /> {table}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Main Content / Table Data */}
+            {selectedTable ? (
+              <div className="glass-panel" style={{ padding: '1rem', overflowX: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>{selectedTable} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>in {selectedDb}</span></h3>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Showing {tableData.length} records</span>
+                </div>
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      {tableData.length > 0 && Object.keys(tableData[0]).map(key => (
+                        <th key={key}>{key}</th>
+                      ))}
+                      <th style={{ textAlign: 'center' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableData.map((row, idx) => (
+                      <tr key={idx}>
+                        {Object.values(row).map((val, i) => (
+                          <td key={i}>{val !== null ? val.toString() : 'NULL'}</td>
+                        ))}
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            onClick={() => handleDeleteRow(idx)}
+                            style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '0.5rem' }}
+                            title="Delete Row"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <Eye size={48} style={{ marginBottom: '1rem', opacity: 0.2 }} />
+                <p>Select a database and table to explore data.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (view === 'auth') {
     return (
@@ -317,7 +608,36 @@ function App() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <input className="input-field" type="text" placeholder="User ID" value={username} onChange={e => setUsername(e.target.value)} />
-              <input className="input-field" type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
+              <div style={{ position: 'relative' }}>
+                <input
+                  className="input-field"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAuth()}
+                  style={{ paddingRight: '3rem' }}
+                />
+                <button
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '1rem',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '4px'
+                  }}
+                  type="button"
+                >
+                  {showPassword ? <Eye size={18} /> : <EyeOff size={18} />}
+                </button>
+              </div>
               <button className={`btn-primary ${loading ? 'btn-loading' : ''}`} onClick={handleAuth}>
                 {loading ? <div className="loading-spinner"></div> : (authMode === 'login' ? <LogIn size={20} /> : <UserPlus size={20} />)}
                 {loading ? 'Processing...' : (authMode === 'login' ? 'Login' : 'Register')}
@@ -332,6 +652,11 @@ function App() {
   if (view === 'pairing') {
     return (
       <div className="app-shell">
+        <header style={{ padding: '1rem', display: 'flex', alignItems: 'center', background: 'transparent', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
+          <button onClick={logout} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', padding: '0.5rem', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ChevronLeft size={24} />
+          </button>
+        </header>
         <div className="scroll-area">
           <div style={{ textAlign: 'center', margin: '4rem 0' }}>
             <Link2 size={56} color="var(--accent-violet)" style={{ marginBottom: '1.5rem', filter: 'drop-shadow(0 0 10px var(--accent-violet-glow))' }} />
@@ -433,7 +758,14 @@ function App() {
                 <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#10B981', letterSpacing: '0.2em' }}>ACTIVE TELEMETRY</span>
               </div>
               <div className="distance-display">
-                <div className="dist-value">{distance !== null ? distance : '-'}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-4xl font-bold text-violet-400">{distance !== null ? distance : '-'} km</span>
+                  {accuracy && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${accuracy < 50 ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`} title="GPS Accuracy">
+                      {accuracy < 50 ? 'High Precision' : 'Low Precision'}
+                    </span>
+                  )}
+                </div>
                 <div className="dist-label">Kilometers Apart</div>
               </div>
               {isTogether && (<div style={{ color: '#10B981', fontSize: '0.9rem', fontWeight: 800, marginTop: '1rem' }}>PROXIMITY SYNCED ❤️</div>)}

@@ -584,3 +584,77 @@ h2 {
         max-width: 1000px !important;
     }
 }
+
+/* Proximity & Heart Animation */
+.proximity-sync {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 2rem;
+    animation: fadeIn 0.8s ease-out;
+}
+
+.together-msg {
+    color: #10B981;
+    font-size: 1.2rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+}
+
+.hearts-container {
+    position: relative;
+    width: 100px;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.heart-merging {
+    position: absolute;
+    filter: drop-shadow(0 0 10px var(--accent-violet-glow));
+}
+
+.heart-left {
+    animation: mergeLeft 2s ease-in-out infinite alternate;
+}
+
+.heart-right {
+    animation: mergeRight 2s ease-in-out infinite alternate;
+}
+
+@keyframes mergeLeft {
+    from {
+        transform: translateX(-20px) scale(1);
+        opacity: 0.8;
+    }
+
+    to {
+        transform: translateX(0) scale(1.2);
+        opacity: 1;
+    }
+}
+
+@keyframes mergeRight {
+    from {
+        transform: translateX(20px) scale(1);
+        opacity: 0.8;
+    }
+
+    to {
+        transform: translateX(0) scale(1.2);
+        opacity: 1;
+    }
+}
+
+.heart-main {
+    transition: var(--transition-premium);
+}
+
+.heart-main:hover {
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 15px var(--accent-magenta));
+}

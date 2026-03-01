@@ -89,6 +89,9 @@ function App() {
         if (data.id) {
           setUser(data);
           localStorage.setItem('user', JSON.stringify(data));
+          if (data.pair_id && view === 'pairing') {
+            setView('dashboard');
+          }
         }
       });
 
@@ -124,7 +127,10 @@ function App() {
     try {
       const res = await fetch(`${API_URL}/api/partner-status/${uid}`);
       const data = await res.json();
-      if (data) setPartnerStatus(data);
+      if (data) {
+        setPartnerStatus(data);
+        if (view === 'pairing') navigateTo('dashboard');
+      }
     } catch (e) {
       console.error("Failed to sync partner status");
     }
@@ -179,7 +185,7 @@ function App() {
       socket.on('distance-update', ({ distance, midpoint, accuracy }) => {
         setDistance(distance.toFixed(2));
         setMidpoint(midpoint);
-        setIsTogether(distance < 0.05);
+        setIsTogether(distance < 0.1);
         if (accuracy) setAccuracy(accuracy);
       });
 
@@ -758,17 +764,27 @@ function App() {
                 <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#10B981', letterSpacing: '0.2em' }}>ACTIVE TELEMETRY</span>
               </div>
               <div className="distance-display">
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold text-violet-400">{distance !== null ? distance : '-'} km</span>
-                  {accuracy && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${accuracy < 50 ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`} title="GPS Accuracy">
+                <div className="dist-value">{distance !== null ? distance : '-'}</div>
+                <div className="dist-label">Kilometers Apart</div>
+
+                {accuracy && (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <span className={`text-xs px-2 py-1 rounded-full ${accuracy < 50 ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`} style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                       {accuracy < 50 ? 'High Precision' : 'Low Precision'}
                     </span>
-                  )}
-                </div>
-                <div className="dist-label">Kilometers Apart</div>
+                  </div>
+                )}
               </div>
-              {isTogether && (<div style={{ color: '#10B981', fontSize: '0.9rem', fontWeight: 800, marginTop: '1rem' }}>PROXIMITY SYNCED ❤️</div>)}
+
+              {isTogether && (
+                <div className="proximity-sync">
+                  <div className="together-msg">You are together</div>
+                  <div className="hearts-container">
+                    <Heart size={32} fill="var(--accent-violet)" color="var(--accent-violet)" className="heart-merging heart-left" />
+                    <Heart size={32} fill="var(--accent-violet)" color="var(--accent-violet)" className="heart-merging heart-right" />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="glass-panel">

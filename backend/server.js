@@ -158,8 +158,7 @@ app.post('/api/photo', upload.single('photo'), (req, res) => {
   const { userId } = req.body;
   if (!req.file) return res.status(400).json({ error: 'No image provided' });
 
-  const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3001}`;
-  const photoUrl = `${baseUrl}/uploads/${req.file.filename}`;
+  const photoUrl = `/uploads/${req.file.filename}`;
   const today = new Date().toISOString().split('T')[0];
   db.prepare('UPDATE users SET photo_url = ?, last_photo_date = ? WHERE id = ?').run(photoUrl, today, userId);
   upsertHistory(userId, today, { photo_url: photoUrl });

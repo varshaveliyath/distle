@@ -3,10 +3,10 @@ services:
     name: distle
     env: node
     plan: free
-    buildCommand: "cd frontend && npm install && npm run build && cd ../backend && npm install"
-    startCommand: "cd backend && npm start"
+    buildCommand: "npm run install:all && npm run build"
+    startCommand: "npm run start"
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATABASE_PATH
-        value: ./backend/distle.db
+        value: ./distle.db

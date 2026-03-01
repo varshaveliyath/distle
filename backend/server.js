@@ -56,6 +56,7 @@ if (fs.existsSync(frontendDist)) {
   // Catch-all for SPA routing
   app.get('*', (req, res) => {
     if (!req.url.startsWith('/api')) {
+      console.log(`[Server] Serving index.html for ${req.url}`);
       res.sendFile(path.join(frontendDist, 'index.html'));
     }
   });
